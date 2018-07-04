@@ -1,0 +1,6 @@
+{
+    "terminal.integrated.env.osx": {
+        "PATH": "/Users/ameyer/.platformio/penv/bin:/Users/ameyer/.platformio/penv:/opt/google-cloud-sdk/bin:/Users/ameyer/flutter/bin:/Users/ameyer/.nvm/versions/node/v9.11.2/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/go/bin:/usr/local/share/dotnet:/opt/X11/bin:/Library/Frameworks/Mono.framework/Versions/Current/Commands:/Applications/Wireshark.app/Contents/MacOS:/usr/local/mysql/bin:/usr/local/apache-maven-3.3.9/bin:/Users/ameyer/Library/Android/sdk/platform-tools:/Users/ameyer/.mos/bin",
+        "PLATFORMIO_CALLER": "vscode"
+    }
+}
