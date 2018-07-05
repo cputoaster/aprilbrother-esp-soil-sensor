@@ -15,7 +15,7 @@
   GPIO5   SCL for tmp112
   GPIO12  Button S1 (Active Access Point for Config Sensor)
   GPIO13  LED
-  GPIO14  Clock Output for soil moisture sensor
+  GPIO14  Clock output for soil moisture sensor
   GPIO15  SWITCH for measuring Soil Moisture or Battery Voltage
 
   /////////////////////////////////////////
@@ -28,24 +28,21 @@
 #include <ESP8266HTTPClient.h>
 #include <ESP8266httpUpdate.h>
 
-const int FW_VERSION = 7;
+const int FW_VERSION = 11;
 String fwUrlBase = "http://shibuya:8080/static/";
 String restUrlBase = "http://shibuya:8080/rest/items/SoilSensor";
 
 // I2C address for temperature sensor
 const int TMP_ADDR  = 0x48;
 
-// Time to sleep (in seconds):
-int sleepTimeS = 3600;
+uint64_t sleepTime = 1800e6;
 
-/////////// Temp Variable //////////
 float temp;
 
-///////////// WIFI VARIABLE //////////////
-String ssid = "";
-String pass = "";
+String ssid = "cputoasters";
+String pass = "kaeferkaefer";
 
-////////////// Soil Moisture Sensor //////
+// Soil Moisture Sensor
 const int PIN_CLK   = 14; // or D5
 const int PIN_SOIL  = A0;
 int Soil = 0;
@@ -53,90 +50,26 @@ int soil_hum = 0;
 int SoilTrig;
 int SoilValue;
 
-/////// Setup Push Button //////////////
+// Push Button
 const int ConfigPin = 12; // D6
 const int Led = 13; // D7
 
-////// Electronique Switch Soil-Moisture & Battery Voltage //////
+// Electronic Switch Soil-Moisture & Battery Voltage
 const int Switch = 15; // D8
 int batt; // Numeric Value
 int Batt; // % Value
 
-///////////////////////////////////////////////////
-String readString;
 WiFiClient client;
-
-//////////// Read Temperature Celsius //////////
-float readTemperature() {
-
-  // Begin transmission
-  Wire.beginTransmission(TMP_ADDR);
-  // Select Data Registers
-  Wire.write(0X00);
-  // End Transmission
-  Wire.endTransmission();
-
-  delay(500);
-
-  // Request 2 bytes , Msb first
-  Wire.requestFrom(TMP_ADDR, 2 );
-
-  // Read temperature as Celsius (the default)
-  while (Wire.available()) {
-    int msb = Wire.read();
-    int lsb = Wire.read();
-    Wire.endTransmission();
-
-    int rawtmp = msb << 8 | lsb;
-    int value = rawtmp >> 4;
-
-    temp = value * 0.0625;
-
-    return temp;
-  }
-}
-
-///////// Get Soil Sensor Value //////////
-float readSoilSensor() {
-  float tmp = 0;
-  float total = 0;
-  float rawVal = 0;
-  int sampleCount = 3;
-
-  for (int i = 0; i < sampleCount; i++) {
-    rawVal = analogRead(PIN_SOIL);
-    total += rawVal;
-  }
-
-  tmp = total / sampleCount;
-  return tmp;
-}
-
-/////////// Get Batt Voltage ///////////
-float readBatt() {
-  float tmp = 0;
-  float total = 0;
-  float rawVal = 0;
-  int sampleCount = 3;
-
-  for (int i = 0; i < sampleCount; i++) {
-    rawVal = analogRead(PIN_SOIL);
-    total += rawVal;
-  }
-  tmp = total / sampleCount;
-  return tmp;
-}
-//////////////////////////////////////////////
 
 void setup() {
 
   Serial.begin(115200);
   Serial.println("starting setup");
 
-  //////////////// I2C BUS /////////////////
+  // I2C BUS
   Wire.begin();
 
-  //////////////// PIN I/O Setup /////////////
+  // PIN I/O Setup
   pinMode(Led, OUTPUT);
   digitalWrite(Led, HIGH);
 
@@ -145,7 +78,7 @@ void setup() {
   pinMode (Switch, OUTPUT); // LOW=Battery Voltage , HIGH=Soil Moisture
   digitalWrite (Switch, HIGH); // Soil-Moisture Selected
 
-  /////////// Soil Moisture //////////////
+  // Soil Moisture
   pinMode(PIN_CLK, OUTPUT);
   pinMode(PIN_SOIL, INPUT);
   analogWriteFreq(40000);
@@ -159,8 +92,6 @@ void setup() {
   Wire.endTransmission();     // stop transmitting
 
   
-
-  ////////////////////////////////////////////////
   Serial.println("starting WiFi");
   WiFi.mode(WIFI_STA); // Set to Station
   delay(200);
@@ -184,15 +115,13 @@ void setup() {
     Serial.println("disconnecting WiFi");
     WiFi.disconnect();
     delay(1000);
-    ESP.deepSleep(sleepTimeS * 1000000, WAKE_RF_DEFAULT);
+    ESP.deepSleep(sleepTime, WAKE_RF_DEFAULT);
     delay(10000);
-    Serial.println("out of deep sleep");
   }
 
   Serial.println("setup done");
 }
 
-////////////////////////////////////////////////////
 void loop() {
   Serial.println("start main loop");
   ReadSensor();
@@ -202,20 +131,21 @@ void loop() {
   WiFi.disconnect();
   Serial.println("http disconnected");
   delay(1000);
-  ESP.deepSleep(sleepTimeS * 1000000, WAKE_RF_DEFAULT);
+  ESP.deepSleep(sleepTime, WAKE_RF_DEFAULT);
   delay(10000);
 }
-//////////////////////////////////////////
+
+
 void ReadSensor()
 {
 
   Serial.println("start sensor read");
-  ///////// Get Temp ///////
+
   temp = readTemperature(); // Real Temps in Celcius
 
   Serial.println("temp: " + String(temp));
 
-  ///////// Get Battery Voltage ////////
+  // Battery Voltage
   digitalWrite (Switch, LOW); // Battery Voltage Selected
   delay(200);
   batt = readBatt();
@@ -225,7 +155,7 @@ void ReadSensor()
 
   Serial.println("batt: " + String(Batt));
 
-  ////// Get Soil Moisture //////
+  // Get Soil Moisture
   delay(100);
   digitalWrite (Switch, HIGH); // Soil Moisture Selected
   delay(200);
@@ -238,7 +168,6 @@ void ReadSensor()
   Serial.println("soil: " + String(Soil));
 }
 
-/////////// ThingSpeak /////////////
 void PutResult()
 {
   if (WiFi.status() == WL_CONNECTED) {
@@ -247,13 +176,13 @@ void PutResult()
     HTTPClient httpClient;
     httpClient.begin( restUrl + "Temp/state");
     httpClient.addHeader("Content-Type", "text/plain");
-    int httpCode = httpClient.PUT(String(temp));
+    httpClient.PUT(String(temp));
     httpClient.begin( restUrl + "Humidity/state");
     httpClient.addHeader("Content-Type", "text/plain");
-    httpCode = httpClient.PUT(String(Soil));
+    httpClient.PUT(String(Soil));
     httpClient.begin( restUrl + "Battery/state");
     httpClient.addHeader("Content-Type", "text/plain");
-    httpCode = httpClient.PUT(String(Batt));
+    httpClient.PUT(String(Batt));
   }
   digitalWrite (Led, HIGH);
   
@@ -301,6 +230,9 @@ void checkForUpdates() {
         case HTTP_UPDATE_NO_UPDATES:
           Serial.println("HTTP_UPDATE_NO_UPDATES");
           break;
+        case HTTP_UPDATE_OK:
+          Serial.println("HTTP_UPDATE_OK");
+          break;
       }
     }
     else {
@@ -312,6 +244,65 @@ void checkForUpdates() {
     Serial.println( httpCode );
   }
   httpClient.end();
+}
+
+float readTemperature() {
+
+  // Begin transmission
+  Wire.beginTransmission(TMP_ADDR);
+  // Select Data Registers
+  Wire.write(0X00);
+  // End Transmission
+  Wire.endTransmission();
+
+  delay(500);
+
+  // Request 2 bytes , Msb first
+  Wire.requestFrom(TMP_ADDR, 2 );
+
+  // Read temperature as Celsius (the default)
+  while (Wire.available()) {
+    int msb = Wire.read();
+    int lsb = Wire.read();
+    Wire.endTransmission();
+
+    int rawtmp = msb << 8 | lsb;
+    int value = rawtmp >> 4;
+
+    temp = value * 0.0625;
+
+    return temp;
+  }
+  return -200;
+}
+
+float readSoilSensor() {
+  float tmp = 0;
+  float total = 0;
+  float rawVal = 0;
+  int sampleCount = 3;
+
+  for (int i = 0; i < sampleCount; i++) {
+    rawVal = analogRead(PIN_SOIL);
+    total += rawVal;
+  }
+
+  tmp = total / sampleCount;
+  return tmp;
+}
+
+float readBatt() {
+  float tmp = 0;
+  float total = 0;
+  float rawVal = 0;
+  int sampleCount = 3;
+
+  for (int i = 0; i < sampleCount; i++) {
+    rawVal = analogRead(PIN_SOIL);
+    total += rawVal;
+  }
+  tmp = total / sampleCount;
+  return tmp;
 }
 
 String getMAC()
