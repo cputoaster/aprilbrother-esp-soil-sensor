@@ -28,7 +28,7 @@
 #include <ESP8266HTTPClient.h>
 #include <ESP8266httpUpdate.h>
 
-const int FW_VERSION = 11;
+const int FW_VERSION = 12;
 String fwUrlBase = "http://shibuya:8080/static/";
 String restUrlBase = "http://shibuya:8080/rest/items/SoilSensor";
 
@@ -177,12 +177,15 @@ void PutResult()
     httpClient.begin( restUrl + "Temp/state");
     httpClient.addHeader("Content-Type", "text/plain");
     httpClient.PUT(String(temp));
+    httpClient.end();
     httpClient.begin( restUrl + "Humidity/state");
     httpClient.addHeader("Content-Type", "text/plain");
     httpClient.PUT(String(Soil));
+    httpClient.end();
     httpClient.begin( restUrl + "Battery/state");
     httpClient.addHeader("Content-Type", "text/plain");
     httpClient.PUT(String(Batt));
+    httpClient.end();
   }
   digitalWrite (Led, HIGH);
   
