@@ -22,15 +22,16 @@
 */
 
 #include <ESP8266WiFi.h>
+#include <MQTT.h>
 
 #include <Wire.h>
 
 #include <ESP8266HTTPClient.h>
 #include <ESP8266httpUpdate.h>
 
-const int FW_VERSION = 12;
+const int FW_VERSION = 13;
 String fwUrlBase = "http://shibuya:8080/static/";
-String restUrlBase = "http://shibuya:8080/rest/items/SoilSensor";
+const char* mqttBroker = "shibuya";
 
 // I2C address for temperature sensor
 const int TMP_ADDR  = 0x48;
@@ -59,7 +60,9 @@ const int Switch = 15; // D8
 int batt; // Numeric Value
 int Batt; // % Value
 
-WiFiClient client;
+WiFiClient wifiClient;
+HTTPClient httpClient;
+MQTTClient mqttClient(256);
 
 void setup() {
 
@@ -149,43 +152,34 @@ void ReadSensor()
   digitalWrite (Switch, LOW); // Battery Voltage Selected
   delay(200);
   batt = readBatt();
-  Batt = map(batt, 736, 880, 0, 100); // 736 = 2.5v , 880 = 3.0v , esp dead at 2.3v
-  if (Batt > 100) Batt = 100;
-  if (Batt < 0) Batt = 0;
-
-  Serial.println("batt: " + String(Batt));
+  Serial.println("batt: " + String(batt));
 
   // Get Soil Moisture
   delay(100);
   digitalWrite (Switch, HIGH); // Soil Moisture Selected
   delay(200);
   soil_hum = readSoilSensor();
-  SoilValue = (100 * soil_hum / batt); // Battery Drop Correction
-  Soil = map(SoilValue, 60, 82, 100, 0); // Convert to 0 - 100%, 0=Dry, 100=Wet
-  if (Soil > 100) Soil = 100;
-  if (Soil <  0) Soil = 0;
-
-  Serial.println("soil: " + String(Soil));
+  Serial.println("soil: " + String(soil_hum));
 }
 
 void PutResult()
 {
   if (WiFi.status() == WL_CONNECTED) {
-    Serial.println("starting REST put");
-    String restUrl = restUrlBase + getMAC();
-    HTTPClient httpClient;
-    httpClient.begin( restUrl + "Temp/state");
-    httpClient.addHeader("Content-Type", "text/plain");
-    httpClient.PUT(String(temp));
-    httpClient.end();
-    httpClient.begin( restUrl + "Humidity/state");
-    httpClient.addHeader("Content-Type", "text/plain");
-    httpClient.PUT(String(Soil));
-    httpClient.end();
-    httpClient.begin( restUrl + "Battery/state");
-    httpClient.addHeader("Content-Type", "text/plain");
-    httpClient.PUT(String(Batt));
-    httpClient.end();
+
+    Serial.println("starting MQTT send");
+    
+    mqttClient.begin(mqttBroker, wifiClient);
+    Serial.print("\nconnecting...");
+    while (!mqttClient.connect("ESP8266", "openhab", "openhab")) {
+      Serial.print(".");
+      delay(1000);
+    }
+    Serial.println("\nconnected!");
+    mqttClient.publish("tele/aprilbrothers-" + getMAC() + "/SENSOR", "{\"Temperature\":" + String(temp)
+      + ",\"BatteryRaw\":" + batt + ",\"SoilRaw\":" + soil_hum + "}");
+    mqttClient.disconnect();
+    Serial.println("MQTT sent");
+
   }
   digitalWrite (Led, HIGH);
   
@@ -269,12 +263,11 @@ float readTemperature() {
     int lsb = Wire.read();
     Wire.endTransmission();
 
-    int rawtmp = msb << 8 | lsb;
-    int value = rawtmp >> 4;
+    int temp = (msb * 256 + lsb) / 16;
+		if(temp > 2047)
+      temp -= 4096;
 
-    temp = value * 0.0625;
-
-    return temp;
+    return temp * 0.0625;
   }
   return -200;
 }
